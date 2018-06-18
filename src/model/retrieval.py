@@ -17,6 +17,37 @@ from SPARQLWrapper import SPARQLWrapper, JSON
 
 DBPEDIA_PUBLICATION_LIST = ['book', 'game', 'film']
 
+PUBLICATION_RETRIEVAL_SELECT = {
+    'book': 'SELECT distinct ?publication ?name ?author \n'
+            '?releaseDate ?publisher ?numberOfPages\n'
+            'WHERE {?publication a dbpedia-owl:Book;\n' 
+            'rdfs:label ?name\n' 
+            'OPTIONAL {?publication dbo:author ?author .}\n'
+            'OPTIONAL {?publication dbp:releaseDate ?releaseDate .}\n'
+            'OPTIONAL {?publication dbo:publisher ?publisher .}\n'
+            'OPTIONAL {?publication dbo:numberOfPages ?numberOfPages .}\n',
+    'film': 'SELECT distinct ?thumbnail ?publication ?name ?director \n'
+            '?starring ?releaseDate ?distributor ?runtime\n'
+            'WHERE {?publication a dbpedia-owl:Film;\n'
+            'rdfs:label ?name\n' \
+            'OPTIONAL {?publication dbo:thumbnail ?thumbnail .}\n'
+            'OPTIONAL {?publication dbp:director ?director .}\n'
+            'OPTIONAL {?publication dbo:starring ?starring .}\n'
+            'OPTIONAL {?publication dbo:releaseDate ?releaseDate .}\n'
+            'OPTIONAL {?publication dbo:distributor ?distributor .}\n'
+            'OPTIONAL {?publication dbo:runtime ?runtime .}\n',
+    'game': 'SELECT distinct ?thumbnail ?publication ?name ?developer \n'
+            '?genre ?releaseDate ?publisher \n'
+            'WHERE { {?publication a dbpedia-owl:Game } union\n'
+            '{?publication a dbpedia-owl:VideoGame}\n'
+            '?publication rdfs:label ?name\n'
+            'OPTIONAL {?publication dbo:thumbnail ?thumbnail .}\n'
+            'OPTIONAL {?publication dbp:developer ?developer .}\n'
+            'OPTIONAL {?publication dbo:genre ?genre .}\n'
+            'OPTIONAL {?publication dbo:releaseDate ?releaseDate .}\n'
+            'OPTIONAL {?publication dbo:publisher ?publisher .}\n',
+}
+
 
 def retrieval_publication_from_dbpedia(query_word, limit_num=100):
     """
@@ -45,40 +76,10 @@ def retrieval_publication_from_dbpedia(query_word, limit_num=100):
     } LIMIT %s
     """ % str(limit_num)
     results = {}
-    selects = dict()
-    selects['book'] = 'SELECT distinct ?publication ?name ?author \n' \
-                      '?releaseDate ?publisher ?numberOfPages\n' \
-                      'WHERE {?publication a dbpedia-owl:Book;\n' \
-                      'rdfs:label ?name\n' \
-                      'OPTIONAL {?publication dbo:author ?author .}\n' \
-                      'OPTIONAL {?publication dbp:releaseDate ?releaseDate .}\n' \
-                      'OPTIONAL {?publication dbo:publisher ?publisher .}\n' \
-                      'OPTIONAL {?publication dbo:numberOfPages ?numberOfPages .}\n'
-
-    selects['film'] = 'SELECT distinct ?thumbnail ?publication ?name ?director \n' \
-                      '?starring ?releaseDate ?distributor ?runtime\n' \
-                      'WHERE {?publication a dbpedia-owl:Film;\n' \
-                      'rdfs:label ?name\n' \
-                      'OPTIONAL {?publication dbo:thumbnail ?thumbnail .}\n' \
-                      'OPTIONAL {?publication dbp:director ?director .}\n' \
-                      'OPTIONAL {?publication dbo:starring ?starring .}\n' \
-                      'OPTIONAL {?publication dbo:releaseDate ?releaseDate .}\n' \
-                      'OPTIONAL {?publication dbo:distributor ?distributor .}\n' \
-                      'OPTIONAL {?publication dbo:runtime ?runtime .}\n'
-
-    selects['game'] = 'SELECT distinct ?thumbnail ?publication ?name ?developer \n' \
-                      '?genre ?releaseDate ?publisher \n' \
-                      'WHERE { {?publication a dbpedia-owl:Game } union\n' \
-                      '{?publication a dbpedia-owl:VideoGame}\n' \
-                      '?publication rdfs:label ?name\n' \
-                      'OPTIONAL {?publication dbo:thumbnail ?thumbnail .}\n' \
-                      'OPTIONAL {?publication dbp:developer ?developer .}\n' \
-                      'OPTIONAL {?publication dbo:genre ?genre .}\n' \
-                      'OPTIONAL {?publication dbo:releaseDate ?releaseDate .}\n' \
-                      'OPTIONAL {?publication dbo:publisher ?publisher .}\n'
 
     for publication_type in DBPEDIA_PUBLICATION_LIST:
-        select = selects[publication_type]
+        select = PUBLICATION_RETRIEVAL_SELECT[publication_type]
+
         query = '%s\n%s\n%s\n%s' % (head, select, sparql_filter, limit)
         sparql.setQuery(query)
         sparql.setReturnFormat(JSON)
@@ -88,7 +89,7 @@ def retrieval_publication_from_dbpedia(query_word, limit_num=100):
     return results
 
 
-def html_format_dbpedia_results(search_word, results):
+def html_format_dbpedia_results(search_word, results, recommend_flag=False):
     """
     html_format_dbpedia_results
     :param search_word:
@@ -97,7 +98,10 @@ def html_format_dbpedia_results(search_word, results):
     """
     html_arr_res = list()
     html_arr_res.append('<html><head><title>Search result:</head></title>')
-    html_arr_res.append('<body><h1>Result for "{}":</h1>'.format(search_word))
+    if recommend_flag:
+        html_arr_res.append('<body><h1>Recommend for you by searching"{}":</h1>'.format(search_word))
+    else:
+        html_arr_res.append('<body><h1>Result for "{}":</h1>'.format(search_word))
 
     # books
     html_arr_res.append('<h2>1、matching books:</h2>')
@@ -110,6 +114,9 @@ def html_format_dbpedia_results(search_word, results):
     html_arr_res.append('<th>numberOfPages</th>')
     html_arr_res.append('</tr>')
 
+    for publication_type in DBPEDIA_PUBLICATION_LIST:
+        if publication_type not in results:
+            results[publication_type] = []
     for query_result in results['book']:
         if 'publication' in query_result:
             html_arr_res.append('<tr>')
@@ -228,6 +235,7 @@ def html_format_dbpedia_results(search_word, results):
             html_arr_res.append('</tr>')
     html_arr_res.append('</table>')
 
+    # games
     html_arr_res.append('<h2>3、matching games:</h2>')
     html_arr_res.append('<table border="1">')
     html_arr_res.append('<tr>')
@@ -298,6 +306,11 @@ def html_format_dbpedia_results(search_word, results):
 
 
 def merge_result(query_result):
+    """
+    merge multiple values in optional fields
+    :param query_result:
+    :return:
+    """
     merged_result = {}
     for item in query_result:
         key = item['publication']['value']
@@ -310,13 +323,9 @@ def merge_result(query_result):
             orig_values = merged_result[key]
             for col, obj in item.items():
                 value = obj['value']
+                if col not in orig_values:
+                    orig_values[col] = list()
                 if value not in orig_values[col]:
                     orig_values[col].append(value)
                     merged_result[key] = orig_values
     return merged_result.values()
-
-
-if __name__ == '__main__':
-    keyword = 'Star'
-    result = retrieval_publication_from_dbpedia(keyword)
-    print(html_format_dbpedia_results(keyword, result))
