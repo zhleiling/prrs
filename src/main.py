@@ -18,7 +18,7 @@ sys.path.append('./model')
 import retrieval, recommend
 
 if __name__ == '__main__':
-    search_word = 'warcraft'
+    search_word = sys.argv[1]
     retrieval_result = retrieval.retrieval_publication_from_dbpedia(search_word)
     retrieval_html_result = retrieval.html_format_dbpedia_results(search_word, retrieval_result)
     with open('../result/retrieval.html', 'w') as of:
